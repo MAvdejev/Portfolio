@@ -1,0 +1,363 @@
+-- database_connection.py
+
+import psycopg2
+try:
+    con = psycopg2.connect(
+        database="Data cleaning",
+        user="postgres",
+        password="1234",
+        host="localhost",
+        port='5432'
+    )
+    cursor_obj = con.cursor()
+    cursor_obj.execute("""
+    SELECT
+        world_wide_boxoffice,
+        award
+    FROM movies
+    WHERE world_wide_boxoffice IS NOT NULL
+    GROUP BY world_wide_boxoffice, award
+    ORDER BY world_wide_boxoffice DESC
+""")
+    result = cursor_obj.fetchall()
+    if result:
+        print("Result Set: ")
+        for row in result:
+            print(row)
+    else:
+        print("No results found.")
+except Exception as e:
+    print("Error:", e)
+finally:
+    con.close()
+
+SUBQUESTION 1:
+What is the correlation between a movie's box office performance and its likelihood of receiving an industry award?
+
+Hypothesis 1: Movies with higher box office results are more likely to receive an industry award.
+Hypothesis 2: A movie's box office performance is not the sole indicator of its success in receiving an industry award. As factors such as genre, critic's reviews, promotional efforts, and voter prejudice might influence its chances of winning an industry award.
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import psycopg2
+
+# Database connection parameters
+db_params = {
+    "host": "localhost",
+    "database": "DBM2",
+    "user": "postgres",
+    "password": "saharla2",
+    "port": "5433"
+}
+
+try:
+    # Connect to the PostgreSQL database
+    conn = psycopg2.connect(**db_params)
+
+    # SQL query
+    sql_query = """
+    select count(g.id) as "awards given", avg(c.world_wide_boxoffice) as "avg_boxoffice"
+    from movies c
+    left join movies_awards g
+    on c.id = g.movie_id
+    where c.world_wide_boxoffice is not null
+
+    union
+
+    select count(g.id) as "awards given", avg(c.world_wide_boxoffice) as "avg_boxoffice"
+    from movies c
+    left join movies_awards g
+    on c.id = g.movie_id
+    where c.world_wide_boxoffice is null
+    ;
+    """
+    
+    # Execute the SQL query and fetch the results into a DataFrame
+    df = pd.read_sql_query(sql_query, conn)
+
+    # Create a pie chart based on the 'awards given' column
+    plt.figure(figsize=(8, 8))
+    plt.pie(df['awards given'], labels=['With Awards', 'Without Awards'], autopct='%1.1f%%', startangle=90)
+    
+    # Set chart title
+    plt.title("Pie Chart: Awards Given Distribution")
+    
+    # Show the pie chart
+    plt.show()
+
+except psycopg2.Error as e:
+    print("Error connecting to the database:", e)
+
+finally:
+    # Close the database connection
+    if conn:
+        conn.close()
+
+SUBQUESTION 2:
+What is the correlation between expert reviews and user reviews on the likelihood of a movie receiving an industry award?
+
+Hypothesis 3: There is a correlation between high expert reviews and the likelihood of a movie’s positive box office performance.
+Hypothesis 4: The findings in expert reviews tend to align with those in user reviews, indicating a significant overlap in the assessments.
+
+import psycopg2
+import pandas as pd
+import matplotlib.pyplot as plt
+
+#define a function to connect to DB
+def connectDB():
+    conn = psycopg2.connect(
+        host = "localhost", # ip adres of the database 
+        database = "Movies_succes_excelstructure", # name of the database
+        user = "postgres", # user id
+        password = 
+    return conn
+
+# the first way to read
+def getAllCustPD(conn):
+    dfCus = pd.read_sql("""SELECT
+  metascore,
+  userscore,
+  CASE
+    WHEN award IS NOT NULL AND award <> '' THEN 'yes'
+    ELSE 'no'
+  END AS award_status
+FROM
+  movies
+WHERE
+  metascore IS NOT NULL
+GROUP BY
+  metascore,
+  userscore,
+  award_status
+ORDER BY
+  metascore DESC""", conn)
+    return dfCus
+
+# call the function to connect with the database
+conn = connectDB() 
+print("Connection succes.")
+
+# get all customers using pandas
+dfCus = getAllCustPD(conn)
+print(dfCus)
+
+# Create a scatter plot
+plt.figure(figsize=(10, 6))
+plt.scatter(dfCus['metascore'], dfCus['userscore'], c=dfCus['award_status'].map({'yes': 'green', 'no': 'red'}), alpha=0.5)
+plt.xlabel('Metascore')
+plt.ylabel('Userscore')
+plt.title('Scatter Plot of Metascore vs. Userscore')
+plt.legend(handles=[plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='green', markersize=10, label='Awarded'),
+                    plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=10, label='Not Awarded')])
+plt.grid(True)
+plt.show()
+
+# close connection
+conn.close()
+
+print("Connection closed.")
+
+-- SUBQUESTION 3:
+What is the correlation between the genre of a movie and its likelihood of receiving an industry award?
+
+Hypothesis 5: Drama movies are more likely to receive industry awards compared to other genres. 
+Hypothesis 6: Comedy movies are less likely to receive industry awards compared to other genres.
+Hypothesis 7: Even though adventure movies have increased in production in the timeframe of the past 20 years, they are less likely to receive an industry award.
+
+Part1:
+import numpy as np
+import psycopg2
+import matplotlib.pyplot as plt
+
+# Database connection
+try:
+    con = psycopg2.connect(
+        database="DBM",
+        user="postgress",
+        password="admin",
+        host="localhost",
+        port='5432'
+    )
+except Exception as e:
+    print("Error:", e)
+    exit()
+
+# Create a cursor
+cursor_obj = con.cursor()
+
+# Execute your SQL query to retrieve the top 5 genres with the highest counts
+cursor_obj.execute("""
+                   select e.g_name, 
+count(c.award) AS "awards given"
+from movies c
+left join movies_genres d 
+on c.id = d.movie_id
+left join genres e
+on d.g_id = e.g_id
+group by e.g_name
+order by "awards given" desc
+                   """)
+result = cursor_obj.fetchall()
+
+# Separate the result into genres and counts
+genres, counts = zip(*result)
+
+# Create a bar chart
+plt.figure(figsize=(10, 6))
+plt.bar(genres, counts)
+plt.title("Movie genres with highest amount of awards")
+plt.xlabel("Genre")
+plt.ylabel("Count")
+plt.xticks(rotation=90)  # Rotate x-axis labels for better visibility
+
+# Show the chart
+plt.tight_layout()
+plt.show()
+
+# Close the database connection
+con.close()
+/Users/m.avdejev/Desktop/SQ3.png
+
+Part 2:
+# Sub-question 3
+import numpy as np
+import psycopg2
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Database connection
+try:
+    con = psycopg2.connect(
+        database="DBM",
+        user="postgress",
+        password="admin",
+        host="localhost",
+        port='5432'
+    )
+except Exception as e:
+    print("Error:", e)
+    exit()
+
+# Create a cursor
+cursor_obj = con.cursor()
+
+# Execute your SQL query to retrieve genres with awards-to-movies ratio for genres with movie count >= 50
+cursor_obj.execute("""
+                   WITH GenreCounts AS (
+                       SELECT e.g_name,
+                              COUNT(DISTINCT c.id) AS movie_count,
+                              COUNT(c.award) AS award_count
+                       FROM movies c
+                       LEFT JOIN movies_genres d 
+                       ON c.id = d.movie_id
+                       LEFT JOIN genres e
+                       ON d.g_id = e.g_id
+                       GROUP BY e.g_name
+                       HAVING COUNT(DISTINCT c.id) >= 50
+                   )
+                   SELECT g.g_name,
+                          g.award_count,
+                          g.movie_count,
+                          g.award_count::FLOAT / g.movie_count AS award_to_movie_ratio
+                   FROM GenreCounts g
+                   ORDER BY award_to_movie_ratio DESC
+                   """)
+df = cursor_obj.fetchall()
+
+# Create a Pandas DataFrame from the query result
+df = pd.DataFrame(df, columns=["Genre", "Awards_Given", "Movie_Count", "Award_to_Movie_Ratio"])
+
+# Print the DataFrame
+print(df)
+
+# Create a bar chart
+plt.figure(figsize=(10, 6))
+plt.bar(df["Genre"], df["Award_to_Movie_Ratio"])
+plt.title("Genre Awards-to-Movies Ratio (Movie Count >= 50)")
+plt.xlabel("Genre")
+plt.ylabel("Award-to-Movie Ratio")
+plt.xticks(rotation=90)  # Rotate x-axis labels for better visibility
+
+# Show the chart
+plt.tight_layout()
+plt.show()
+
+# Close the database connection
+con.close()
+
+SUBQUESTION 4:
+What is the correlation between a movie's release date and the likelihood of a movie receiving an industry award?
+
+Hypothesis 8:  Movies released in the later part of the calendar year (October, November and December) are more likely to receive an industry award compared to those released earlier in the year.
+
+import psycopg2
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Define a function to connect to DB
+def connectDB():
+    conn = psycopg2.connect(
+        host="localhost",  # IP address of the database
+        database="Movies_succes_excelstructure",  # Name of the database
+        user="postgres",  # User ID
+        password="asdf"  # Password of the database
+    )
+    return conn
+
+# The first way to read
+def getAllCustPD(conn):
+    dfCus = pd.read_sql("""
+        SELECT
+            COUNT(award) AS "awards given",
+            EXTRACT(QUARTER FROM rel_date) AS "quarter of Y"
+        FROM
+            movies
+        WHERE
+            rel_date IS NOT NULL
+        GROUP BY
+            "quarter of Y"
+        ORDER BY
+            "awards given" DESC
+    """, conn)
+    return dfCus
+
+# Call the function to connect with the database
+conn = connectDB()
+print("Connection successful.")
+
+# Get all customers using Pandas
+dfCus = getAllCustPD(conn)
+
+# Sort the DataFrame by "awards given" in descending order
+dfCus = dfCus.sort_values(by="awards given", ascending=True)
+
+# Extract data for the bar chart
+quarter = dfCus["quarter of Y"]
+award = dfCus["awards given"]
+
+# Map numerical quarters to month labels
+quarter_labels = {
+    1: "January - March",
+    2: "April - June",
+    3: "July - September",
+    4: "October - December"
+}
+
+# Convert numerical quarters to month labels
+quarter = quarter.map(quarter_labels)
+
+# Create a bar chart
+plt.figure(figsize=(10, 6))
+plt.bar(quarter, award)
+plt.title("Movies with the Highest Number of Awards by Quarter")
+plt.xlabel("Quarter")
+plt.ylabel("Awards")
+plt.xticks(rotation=45)  # Rotate x-axis labels for better visibility
+
+# Show the chart
+plt.tight_layout()
+plt.show()
+
+# Close the database connection
+conn.close()
+print("Connection closed.")
